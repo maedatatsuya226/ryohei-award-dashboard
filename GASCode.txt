@@ -1,0 +1,352 @@
+/**
+ * スクリプト名: 良平アワード 選考管理・PDF出力システム（完全フルスタック版）
+ */
+
+const CONFIG = {
+  DATA_SHEET: 'データ受信',
+  ENTRY_TEMPLATE: 'エントリー',
+  FINAL_TEMPLATE: '最終',
+  OUTPUT_FOLDER_ID: '1LwWc6p9lTqOY0tn1n1c45XwxVkVihD9E', 
+};
+
+// ==========================================
+// 1. セルマッピング（変更なし）
+// ==========================================
+const CELL_MAP_ENTRY = {
+  hospitalName: 'H1', candidateName: 'B2', age: 'G2', yearsOfService: 'I2',
+  department: 'B3', jobTitle: 'G3', reason: 'A5', episode: 'A15',
+  eval1_check: 'A22', eval1_note: 'D22', eval2_check: 'A23', eval2_note: 'D23', 
+  eval3_check: 'A24', eval3_note: 'D24', eval4_check: 'A25', eval4_note: 'D25', 
+  eval5_check: 'A26', eval5_note: 'D26', eval6_check: 'A27', eval6_note: 'D27', 
+  remarks: 'A29', recommenderDept: 'B36', recommenderTitle: 'F36', recommenderName: 'B37'
+};
+
+const CELL_MAP_FINAL = {
+  hospitalName: 'H1', candidateName: 'B2', age: 'G2', yearsOfService: 'I2',
+  department: 'B3', jobTitle: 'G3', theme: 'B4', startYear: 'H4',
+  summary: 'A6', results: 'B16', continuity: 'B17', rippleEffect: 'B18',
+  socialContribution: 'B19', selfAnalysis: 'B20', remarks: 'B22',         
+  recommenderDept: 'B29', recommenderTitle: 'F29', recommenderName: 'B30'
+};
+
+// ==========================================
+// 2. メニュー追加
+// ==========================================
+function onOpen() {
+  const ui = SpreadsheetApp.getUi();
+  ui.createMenu('選考システム')
+    .addItem('1. データ受信シートを自動セットアップ', 'setupSystem')
+    .addSeparator()
+    .addItem('2. テスト用PDFを生成（エントリー用）', 'testGenerateEntry')
+    .addItem('3. テスト用PDFを生成（最終用）', 'testGenerateFinal')
+    .addToUi();
+}
+
+// ==========================================
+// 3. データ受信シートの自動セットアップ（★全35項目に修正）
+// ==========================================
+function setupSystem() {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    let sheet = ss.getSheetByName(CONFIG.DATA_SHEET);
+    if (!sheet) sheet = ss.insertSheet(CONFIG.DATA_SHEET);
+    
+    // エントリーと最終の「すべての項目」を網羅したヘッダー（全35列）
+    const headers = [
+      'タイムスタンプ', '選考種別', '病院名', '対象者名', '年齢', '勤続年数', '所属部署', '職種',
+      // エントリー用
+      '推薦理由', '特筆エピソード', 
+      '評価1_医療貢献(済)', '評価1_備考', '評価2_業務改善(済)', '評価2_備考', '評価3_対外活動(済)', '評価3_備考', 
+      '評価4_多職種連携(済)', '評価4_備考', '評価5_次世代(済)', '評価5_備考', '評価6_その他(済)', '評価6_備考',
+      // 最終選考用
+      '活動テーマ', '活動開始年', '活動概要', '活動の成果', '継続性・発展性', '波及効果・拡張性', '社会貢献度', '自己分析・改善点',
+      // 共通下部
+      '備考', '推薦者_所属', '推薦者_役職', '推薦者_氏名', '添付ファイルURL'
+    ];
+    
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#e0e0e0');
+    sheet.setFrozenRows(1);
+    
+    SpreadsheetApp.getUi().alert('セットアップ完了！\n全35列の完璧なデータベースが構築されました。');
+  } catch (e) {
+    console.error('セットアップエラー: ' + e.stack);
+    SpreadsheetApp.getUi().alert('エラーが発生しました:\n' + e.message);
+  }
+}
+
+// ==========================================
+// 4. テンプレートへの流し込み＆PDF出力処理（変更なし）
+// ==========================================
+function generatePDF(docType, data) {
+  let newSheet = null; 
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  try {
+    const sheetName = docType === 'entry' ? CONFIG.ENTRY_TEMPLATE : CONFIG.FINAL_TEMPLATE;
+    const templateSheet = ss.getSheetByName(sheetName);
+    const folder = DriveApp.getFolderById(CONFIG.OUTPUT_FOLDER_ID);
+    if (!templateSheet) throw new Error(`シート「${sheetName}」が見つかりません。`);
+    
+    const docTypeName = docType === 'entry' ? 'エントリー' : '最終選考';
+    const timestamp = Utilities.formatDate(new Date(), "JST", "MMdd_HHmm");
+    const newSheetName = `【${docTypeName}】${data.candidateName}_${timestamp}`;
+    
+    newSheet = templateSheet.copyTo(ss).setName(newSheetName);
+    const cellMap = docType === 'entry' ? CELL_MAP_ENTRY : CELL_MAP_FINAL;
+
+    const keys = Object.keys(cellMap);
+    keys.forEach(key => {
+      const cellAddress = cellMap[key];
+      if (cellAddress && data[key] !== undefined) {
+        const cell = newSheet.getRange(cellAddress);
+        
+        if (key.includes('_check')) {
+          const rule = cell.getDataValidation();
+          if (rule !== null && rule.getCriteriaType() === SpreadsheetApp.DataValidationCriteria.CHECKBOX) {
+            cell.setValue(data[key] ? true : false);
+          } else {
+            let text = cell.getValue().toString();
+            if (text.length > 3) {
+              const cleanText = text.replace(/^[□☐☑■✔\s]+/, '');
+              cell.setValue((data[key] ? '☑ ' : '□ ') + cleanText);
+            } else {
+              cell.setValue(data[key] ? '☑' : '□');
+            }
+          }
+        } else {
+          // テキストの流し込み
+          const textValue = String(data[key] || "");
+          cell.setValue(textValue);
+          
+          // ▼▼ 自動文字縮小ロジック ▼▼
+          // 文字列の長さによって段階的にフォントサイズを小さくする
+          const length = textValue.length;
+          let fontSize = 10; // デフォルト（基準）サイズ
+          
+          // 項目の性質（通常1行か、長文エリアか）で基準を変えたい場合は
+          // セルの元のフォントサイズを取得して基準にするのが安全です
+          const originalFontSize = cell.getFontSize() || 10;
+          
+          if (length > 200) {
+            fontSize = Math.max(originalFontSize - 4, 6); // 最小6pt
+          } else if (length > 150) {
+            fontSize = Math.max(originalFontSize - 3, 7);
+          } else if (length > 100) {
+            fontSize = Math.max(originalFontSize - 2, 8);
+          } else if (length > 60) {
+            fontSize = Math.max(originalFontSize - 1, 9);
+          } else {
+            fontSize = originalFontSize;
+          }
+          
+          cell.setFontSize(fontSize);
+          // ▲▲ 自動文字縮小ロジックここまで ▲▲
+        }
+      }
+    });
+    SpreadsheetApp.flush();
+
+    const url = `https://docs.google.com/spreadsheets/d/${ss.getId()}/export?exportFormat=pdf&format=pdf&size=A4&portrait=true&fitw=true&sheetnames=false&printtitle=false&pagenumbers=false&gridlines=false&fzr=false&gid=${newSheet.getSheetId()}`;
+    const options = { headers: { 'Authorization': 'Bearer ' + ScriptApp.getOAuthToken() }, muteHttpExceptions: true };
+    const response = UrlFetchApp.fetch(url, options);
+    if (response.getResponseCode() !== 200) throw new Error('PDF生成失敗');
+
+    folder.createFile(response.getBlob().setName(`【${docTypeName}】良平アワード_${data.candidateName}.pdf`));
+  } catch (e) {
+    if (newSheet && e.message.includes('PDF生成失敗')) ss.deleteSheet(newSheet); 
+    throw e;
+  }
+}
+
+// ==========================================
+// 5. フロントエンドからのデータ受信API（★全35項目蓄積に修正）
+// ==========================================
+function doPost(e) {
+  try {
+    const params = JSON.parse(e.postData.contents);
+    
+    // ▼▼ 評価データの保存処理分岐 ▼▼
+    if (params.action === 'evaluate') {
+      const ss = SpreadsheetApp.getActiveSpreadsheet();
+      let evalSheet = ss.getSheetByName("評価結果");
+      if (!evalSheet) {
+        evalSheet = ss.insertSheet("評価結果");
+        evalSheet.appendRow(["タイムスタンプ", "対象者", "所属", "職種", "評価者名", "スコア", "コメント"]);
+        // ヘッダー行の簡単な書式設定
+        evalSheet.getRange("A1:G1").setFontWeight("bold").setBackground("#f3f4f6");
+        evalSheet.setFrozenRows(1);
+      }
+      evalSheet.appendRow([
+        new Date(),
+        params.candidateName || '',
+        `${params.hospitalName || ''} / ${params.department || ''}`,
+        params.jobTitle || '',
+        params.reviewerName || '',
+        params.score || '',
+        params.comment || ''
+      ]);
+      return ContentService.createTextOutput(JSON.stringify({ status: 'success', message: '評価を保存しました' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    // ▲▲ 評価データの保存処理分岐 ここまで ▲▲
+
+    const docType = params.docType;
+    let fileUrl = ""; 
+    
+    if (params.files && params.files.length > 0) {
+      try {
+        const folder = DriveApp.getFolderById(CONFIG.OUTPUT_FOLDER_ID);
+        const urls = [];
+        for (let i = 0; i < params.files.length; i++) {
+          const f = params.files[i];
+          let base64Data = f.fileData;
+          if (base64Data.includes(',')) base64Data = base64Data.split(',')[1];
+          const decodedFile = Utilities.base64Decode(base64Data);
+          const blob = Utilities.newBlob(decodedFile, f.mimeType || 'application/octet-stream', `【添付】${params.candidateName}_${f.fileName}`);
+          urls.push(folder.createFile(blob).getUrl());
+        }
+        // 複数URLを改行で結合してスプレッドシートの1セルに保存
+        fileUrl = urls.join('\n'); 
+      } catch (err) {
+        console.error("添付ファイルの保存に失敗: " + err.stack);
+      }
+    } else if (params.fileData && params.fileName) {
+      // 古いバージョンの1ファイル処理（互換性用）
+      try {
+        const folder = DriveApp.getFolderById(CONFIG.OUTPUT_FOLDER_ID);
+        let base64Data = params.fileData;
+        if (base64Data.includes(',')) base64Data = base64Data.split(',')[1];
+        const decodedFile = Utilities.base64Decode(base64Data);
+        const blob = Utilities.newBlob(decodedFile, params.mimeType || 'application/octet-stream', `【添付】${params.candidateName}_${params.fileName}`);
+        fileUrl = folder.createFile(blob).getUrl(); 
+      } catch (err) {
+        console.error("添付ファイルの保存に失敗: " + err.stack);
+      }
+    }
+
+    if (docType) {
+      generatePDF(docType, params);
+    } else {
+      throw new Error("docTypeが指定されていません。");
+    }
+
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const dataSheet = ss.getSheetByName(CONFIG.DATA_SHEET);
+    
+    // ヘッダー順に完全対応させた35項目のデータ
+    const newRow = [
+      new Date(), 
+      docType === 'entry' ? 'エントリー' : '最終選考', 
+      params.hospitalName || '', params.candidateName || '', params.age || '', params.yearsOfService || '', params.department || '', params.jobTitle || '',
+      
+      // エントリー用（チェックボックスは☑/□の文字に変換してシートに記録）
+      params.reason || '', params.episode || '',
+      params.eval1_check ? '☑' : '□', params.eval1_note || '',
+      params.eval2_check ? '☑' : '□', params.eval2_note || '',
+      params.eval3_check ? '☑' : '□', params.eval3_note || '',
+      params.eval4_check ? '☑' : '□', params.eval4_note || '',
+      params.eval5_check ? '☑' : '□', params.eval5_note || '',
+      params.eval6_check ? '☑' : '□', params.eval6_note || '',
+      
+      // 最終選考用
+      params.theme || '', params.startYear || '', params.summary || '', params.results || '', params.continuity || '', params.rippleEffect || '', params.socialContribution || '', params.selfAnalysis || '',
+      
+      // 共通下部
+      params.remarks || '', params.recommenderDept || '', params.recommenderTitle || '', params.recommenderName || '', fileUrl
+    ];
+    dataSheet.appendRow(newRow);
+
+    return ContentService.createTextOutput(JSON.stringify({ status: 'success', message: '送信が完了し、PDFが生成されました' })).setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: error.message })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ==========================================
+// 6. 審査員ダッシュボード用のデータ送信API
+// ==========================================
+function doGet(e) {
+  try {
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+
+    // ▼▼ 評価者一覧の取得用API ▼▼
+    if (e && e.parameter && e.parameter.action === 'getReviewers') {
+      const reviewerSheet = ss.getSheetByName("審査者一覧");
+      if (!reviewerSheet) {
+        // 万が一シートがない場合は空配列を返す
+        return ContentService.createTextOutput(JSON.stringify([])).setMimeType(ContentService.MimeType.JSON);
+      }
+      
+      const reviewerData = reviewerSheet.getDataRange().getValues();
+      let reviewers = [];
+      if (reviewerData.length > 1) {
+        // A列（0番目）の2行目以降を取得（空白は除外）
+        reviewers = reviewerData.slice(1).map(row => row[0]).filter(name => name !== '');
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify(reviewers)).setMimeType(ContentService.MimeType.JSON);
+    }
+    // ▲▲ 評価者一覧の取得用API ここまで ▲▲
+
+    const sheet = ss.getSheetByName(CONFIG.DATA_SHEET);
+    if (!sheet) throw new Error("データシートが見つかりません。");
+
+    const data = sheet.getDataRange().getValues();
+    const headers = data[0];
+    const rows = data.slice(1);
+    
+    const result = rows.filter(row => row[0] !== "").map((row, index) => {
+      let obj = { id: index + 1 }; 
+      headers.forEach((header, colIndex) => {
+        if (row[colIndex] instanceof Date) {
+          obj[header] = Utilities.formatDate(row[colIndex], "JST", "yyyy/MM/dd HH:mm");
+        } else {
+          obj[header] = row[colIndex];
+        }
+      });
+      return obj;
+    });
+
+    // ▼▼ 評価済みデータの紐付け処理 ▼▼
+    const evalSheet = ss.getSheetByName("評価結果");
+    if (evalSheet) {
+      const evalData = evalSheet.getDataRange().getValues();
+      if (evalData.length > 1) {
+        const evalHeaders = evalData[0];
+        const targetIdx = evalHeaders.indexOf("対象者");
+        const reviewerIdx = evalHeaders.indexOf("評価者名");
+        
+        if (targetIdx !== -1 && reviewerIdx !== -1) {
+          // 各候補者ごとに、誰が評価したかのリスト（evaluatedBy）を作る
+          const evalMap = {};
+          for (let i = 1; i < evalData.length; i++) {
+             const targetName = evalData[i][targetIdx];
+             const reviewerName = evalData[i][reviewerIdx];
+             if (targetName && reviewerName) {
+                if (!evalMap[targetName]) evalMap[targetName] = [];
+                // 同じ名前が複数回入らないようにする
+                if (!evalMap[targetName].includes(reviewerName)) {
+                   evalMap[targetName].push(reviewerName);
+                }
+             }
+          }
+          
+          // result配列の各要素に evaluatedBy を付与する
+          result.forEach(candidate => {
+            const name = candidate["対象者名"];
+            candidate.evaluatedBy = evalMap[name] || [];
+          });
+        }
+      }
+    }
+    // ▲▲ 評価済みデータの紐付け処理 ここまで ▲▲
+
+    return ContentService.createTextOutput(JSON.stringify({ status: 'success', data: result })).setMimeType(ContentService.MimeType.JSON);
+  } catch (error) {
+    return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: error.message })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ==========================================
+// 7. テスト実行用関数
+// ==========================================
+// （長くなるため省略：テスト関数は今までと同じものです）
