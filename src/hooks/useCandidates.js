@@ -87,9 +87,8 @@ export function useCandidates() {
                         recommenderDept: row['推薦者_所属'] || '',
                         recommenderTitle: row['推薦者_役職'] || '',
 
-                        // ファイル
-                        fileUrl: row['添付ファイルURL'] || null,
-                        fileName: row['添付ファイルURL'] ? '【添付】関連資料を開く' : null,
+                        // ファイル（複数URL対応）
+                        fileUrls: row['添付ファイルURL'] ? String(row['添付ファイルURL']).split('\n').filter(url => url.trim() !== '') : [],
 
                         // NEW: 評価済み審査員リスト
                         evaluatedBy: row.evaluatedBy || [],

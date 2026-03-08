@@ -24,10 +24,10 @@ export default function CandidateCard({ candidate, onEvaluate }) {
                     <span className={`text-xs font-bold px-2 py-1 rounded inline-block ${candidate.docType === 'final' ? 'bg-amber-500 text-slate-900' : 'bg-slate-700 text-slate-300'}`}>
                         {candidate.docType === 'final' ? '最終選考' : 'エントリー'}
                     </span>
-                    {candidate.fileName && (
+                    {candidate.fileUrls && candidate.fileUrls.length > 0 && (
                         <div className="bg-amber-500/20 text-amber-400 text-xs px-2 py-1 rounded border border-amber-500/30 flex items-center gap-1">
                             <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
-                            資料あり
+                            資料 {candidate.fileUrls.length}件
                         </div>
                     )}
                 </div>
@@ -177,13 +177,17 @@ export default function CandidateCard({ candidate, onEvaluate }) {
                         )}
                     </button>
 
-                    {candidate.fileName && (
-                        <a href={candidate.fileUrl} target="_blank" rel="noopener noreferrer" className="block w-full">
-                            <button className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-slate-50 hover:bg-slate-100 text-slate-700 text-sm font-medium rounded border border-slate-200 shadow-sm transition-all focus:ring-2 focus:ring-amber-500 focus:outline-none">
-                                <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
-                                添付資料を閲覧する
-                            </button>
-                        </a>
+                    {candidate.fileUrls && candidate.fileUrls.length > 0 && (
+                        <div className="space-y-2 w-full">
+                            {candidate.fileUrls.map((url, idx) => (
+                                <a key={idx} href={url} target="_blank" rel="noopener noreferrer" className="block w-full">
+                                    <button className="w-full flex items-center justify-center gap-2 py-2 px-4 bg-slate-50 hover:bg-slate-100 text-slate-700 text-sm font-medium rounded border border-slate-200 shadow-sm transition-all focus:ring-2 focus:ring-amber-500 focus:outline-none">
+                                        <svg className="w-4 h-4 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path></svg>
+                                        添付資料 {candidate.fileUrls.length > 1 ? `${idx + 1} ` : ''}を閲覧
+                                    </button>
+                                </a>
+                            ))}
+                        </div>
                     )}
 
                     <button
