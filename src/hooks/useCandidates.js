@@ -5,6 +5,7 @@ import { mockCandidates } from '../data/mockCandidates';
 
 export function useCandidates() {
     const [candidates, setCandidates] = useState([]);
+    const [phase, setPhase] = useState('1次審査'); // デフォルト状態
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
@@ -37,6 +38,11 @@ export function useCandidates() {
 
                 if (json.status !== 'success') {
                     throw new Error(json.message || 'API responded with error statu');
+                }
+
+                // APIからフェーズ情報を取得
+                if (json.phase) {
+                    setPhase(json.phase);
                 }
 
                 // GASからのJSONデータを、Dashboardの既存のキー（英語）にマッピングする
@@ -90,6 +96,10 @@ export function useCandidates() {
                         // ファイル（複数URL対応）
                         fileUrls: row['添付ファイルURL'] ? String(row['添付ファイルURL']).split('\n').filter(url => url.trim() !== '') : [],
 
+                        // NEW: 事務局判定フラグ
+                        advancedTo2nd: row['2次審査進出'] === true || row['2次審査進出'] === 'TRUE' || row['2次審査進出'] === 'true',
+                        advancedToFinal: row['最終選考進出'] === true || row['最終選考進出'] === 'TRUE' || row['最終選考進出'] === 'true',
+
                         // NEW: 評価済み審査員リスト
                         evaluatedBy: row.evaluatedBy || [],
                     };
@@ -111,5 +121,5 @@ export function useCandidates() {
         fetchCandidates();
     }, []);
 
-    return { candidates, loading, error };
+    return { candidates, phase, loading, error };
 }

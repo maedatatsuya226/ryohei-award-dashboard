@@ -51,7 +51,7 @@ export default function CandidateCard({ candidate, onEvaluate }) {
             {/* 2. Primary Information Section (Always visible) */}
             <div className="p-5 flex-1 flex flex-col gap-5 relative bg-white">
                 <div>
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 border-b border-slate-100 pb-1">活動テーマ ({candidate.startYear ? `${candidate.startYear}年〜` : '時期未定'})</h3>
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 border-b border-slate-100 pb-1">活動テーマ ({candidate.startYear ? (String(candidate.startYear).match(/年/) ? `${candidate.startYear}` : `${candidate.startYear}年`) : '時期未定'})</h3>
                     <p className="text-slate-800 font-bold text-base leading-relaxed">{candidate.theme || '未入力'}</p>
                 </div>
 

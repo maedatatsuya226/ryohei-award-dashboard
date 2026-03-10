@@ -6,7 +6,7 @@ import ReviewerLoginModal from './components/ReviewerLoginModal';
 import { useCandidates } from './hooks/useCandidates';
 
 function App() {
-  const { candidates, loading, error } = useCandidates();
+  const { candidates, phase, loading, error } = useCandidates();
 
   // States for Modals
   const [selectedCandidate, setSelectedCandidate] = useState(null);
@@ -60,6 +60,19 @@ function App() {
       if (filterDepartment && c.department !== filterDepartment) return false;
       if (filterJobTitle && c.jobTitle !== filterJobTitle) return false;
 
+      // フェーズ・docTypeによる対象者の絞り込み
+      if (phase === '1次審査') {
+        if (c.docType !== 'entry') return false;
+      }
+      if (phase === '2次審査') {
+        if (c.docType !== 'entry' || !c.advancedTo2nd) return false;
+      }
+      if (phase === '最終選考') {
+        // 最終選考用のデータは無条件で表示。エントリー用データは最終選考進出フラグが立っている人のみ表示
+        if (c.docType === 'final') return true;
+        if (c.docType === 'entry' && !c.advancedToFinal) return false;
+      }
+
       // フリーワードによる部分一致検索
       if (filterText) {
         const lowerFilter = filterText.toLowerCase();
@@ -102,6 +115,7 @@ function App() {
         showEvaluated={showEvaluated}
         setShowEvaluated={setShowEvaluated}
         reviewers={reviewers}
+        phase={phase}
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
@@ -158,6 +172,7 @@ function App() {
       {selectedCandidate && (
         <EvaluationModal
           candidate={selectedCandidate}
+          phase={phase}
           onClose={() => setSelectedCandidate(null)}
         />
       )}

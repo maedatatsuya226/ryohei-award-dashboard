@@ -25,7 +25,7 @@ const CELL_MAP_FINAL = {
   hospitalName: 'H1', candidateName: 'B2', age: 'G2', yearsOfService: 'I2',
   department: 'B3', jobTitle: 'G3', theme: 'B4', startYear: 'H4',
   summary: 'A6', results: 'B16', continuity: 'B17', rippleEffect: 'B18',
-  socialContribution: 'B19', selfAnalysis: 'B20', remarks: 'B22',         
+  socialContribution: 'B19', selfAnalysis: 'B20', remarks: 'A22',         
   recommenderDept: 'B29', recommenderTitle: 'F29', recommenderName: 'B30'
 };
 
@@ -61,17 +61,42 @@ function setupSystem() {
       // 最終選考用
       '活動テーマ', '活動開始年', '活動概要', '活動の成果', '継続性・発展性', '波及効果・拡張性', '社会貢献度', '自己分析・改善点',
       // 共通下部
-      '備考', '推薦者_所属', '推薦者_役職', '推薦者_氏名', '添付ファイルURL'
+      '備考', '推薦者_所属', '推薦者_役職', '推薦者_氏名', '添付ファイルURL',
+      // 事務局判定用（手動入力）
+      '2次審査進出', '最終選考進出'
     ];
     
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.getRange(1, 1, 1, headers.length).setFontWeight('bold').setBackground('#e0e0e0');
     sheet.setFrozenRows(1);
     
-    SpreadsheetApp.getUi().alert('セットアップ完了！\n全35列の完璧なデータベースが構築されました。');
+    // 2. 「設定」シートの自動生成
+    let settingSheet = ss.getSheetByName('設定');
+    if (!settingSheet) {
+      settingSheet = ss.insertSheet('設定');
+      settingSheet.getRange('A1:B1').setValues([['設定項目', '設定値']]).setFontWeight('bold').setBackground('#f3f4f6');
+      settingSheet.getRange('A2').setValue('現在の審査フェーズ');
+      const phaseCell = settingSheet.getRange('B2');
+      phaseCell.setValue('1次審査');
+      // プルダウン設定
+      const rule = SpreadsheetApp.newDataValidation().requireValueInList(['1次審査', '2次審査', '最終選考', '審査期間外'], true).build();
+      phaseCell.setDataValidation(rule);
+      settingSheet.setColumnWidth(1, 150);
+      settingSheet.setColumnWidth(2, 200);
+    }
+
+    // 3. 「1次審査・集計」シートの自動生成
+    let aggSheet1 = ss.getSheetByName('1次審査・集計');
+    if (!aggSheet1) {
+      aggSheet1 = ss.insertSheet('1次審査・集計');
+      aggSheet1.getRange('A1:E1').setValues([['対象者名', '所属', '平均スコア', '評価人数', '各審査員の評価（審査員名: スコア）']]).setFontWeight('bold').setBackground('#e0f2fe');
+      aggSheet1.setFrozenRows(1);
+    }
+    
+    // Editorから実行された場合は getUi() が使えずエラーになるため、console.log に変更
+    console.log('セットアップ完了！データ受信、設定、集計シートが構築されました。');
   } catch (e) {
     console.error('セットアップエラー: ' + e.stack);
-    SpreadsheetApp.getUi().alert('エラーが発生しました:\n' + e.message);
   }
 }
 
@@ -168,24 +193,46 @@ function doPost(e) {
     // ▼▼ 評価データの保存処理分岐 ▼▼
     if (params.action === 'evaluate') {
       const ss = SpreadsheetApp.getActiveSpreadsheet();
-      let evalSheet = ss.getSheetByName("評価結果");
-      if (!evalSheet) {
-        evalSheet = ss.insertSheet("評価結果");
-        evalSheet.appendRow(["タイムスタンプ", "対象者", "所属", "職種", "評価者名", "スコア", "コメント"]);
-        // ヘッダー行の簡単な書式設定
-        evalSheet.getRange("A1:G1").setFontWeight("bold").setBackground("#f3f4f6");
-        evalSheet.setFrozenRows(1);
+      
+      // 1次審査の場合は別シートに保存
+      if (params.phase === '1次審査') {
+        let eval1Sheet = ss.getSheetByName("1次審査結果");
+        if (!eval1Sheet) {
+          eval1Sheet = ss.insertSheet("1次審査結果");
+          eval1Sheet.appendRow(["タイムスタンプ", "対象者", "所属", "職種", "評価者名", "スコア(★1-5)"]);
+          eval1Sheet.getRange("A1:F1").setFontWeight("bold").setBackground("#fef08a");
+          eval1Sheet.setFrozenRows(1);
+        }
+        eval1Sheet.appendRow([
+          new Date(),
+          params.candidateName || '',
+          `${params.hospitalName || ''} / ${params.department || ''}`,
+          params.jobTitle || '',
+          params.reviewerName || '',
+          params.score || ''
+        ]);
+        return ContentService.createTextOutput(JSON.stringify({ status: 'success', message: '1次審査の評価を保存しました' })).setMimeType(ContentService.MimeType.JSON);
+      } else {
+        // 2次・最終審査用（既存処理）
+        let evalSheet = ss.getSheetByName("評価結果");
+        if (!evalSheet) {
+          evalSheet = ss.insertSheet("評価結果");
+          evalSheet.appendRow(["タイムスタンプ", "対象者", "所属", "職種", "フェーズ", "評価者名", "スコア", "コメント"]);
+          evalSheet.getRange("A1:H1").setFontWeight("bold").setBackground("#f3f4f6");
+          evalSheet.setFrozenRows(1);
+        }
+        evalSheet.appendRow([
+          new Date(),
+          params.candidateName || '',
+          `${params.hospitalName || ''} / ${params.department || ''}`,
+          params.jobTitle || '',
+          params.phase || '2次審査',
+          params.reviewerName || '',
+          params.score || '',
+          params.comment || ''
+        ]);
+        return ContentService.createTextOutput(JSON.stringify({ status: 'success', message: '評価を保存しました' })).setMimeType(ContentService.MimeType.JSON);
       }
-      evalSheet.appendRow([
-        new Date(),
-        params.candidateName || '',
-        `${params.hospitalName || ''} / ${params.department || ''}`,
-        params.jobTitle || '',
-        params.reviewerName || '',
-        params.score || '',
-        params.comment || ''
-      ]);
-      return ContentService.createTextOutput(JSON.stringify({ status: 'success', message: '評価を保存しました' })).setMimeType(ContentService.MimeType.JSON);
     }
     // ▲▲ 評価データの保存処理分岐 ここまで ▲▲
 
@@ -251,7 +298,10 @@ function doPost(e) {
       params.theme || '', params.startYear || '', params.summary || '', params.results || '', params.continuity || '', params.rippleEffect || '', params.socialContribution || '', params.selfAnalysis || '',
       
       // 共通下部
-      params.remarks || '', params.recommenderDept || '', params.recommenderTitle || '', params.recommenderName || '', fileUrl
+      params.remarks || '', params.recommenderDept || '', params.recommenderTitle || '', params.recommenderName || '', fileUrl,
+      
+      // 事務局判定用フラグ枠（初期値は空）
+      false, false
     ];
     dataSheet.appendRow(newRow);
 
@@ -287,6 +337,14 @@ function doGet(e) {
     }
     // ▲▲ 評価者一覧の取得用API ここまで ▲▲
 
+    // ▼▼ 現在のフェーズ取得 ▼▼
+    let currentPhase = '1次審査'; // デフォルト
+    const settingSheet = ss.getSheetByName('設定');
+    if (settingSheet) {
+      const phaseVal = settingSheet.getRange('B2').getValue();
+      if (phaseVal) currentPhase = phaseVal;
+    }
+
     const sheet = ss.getSheetByName(CONFIG.DATA_SHEET);
     if (!sheet) throw new Error("データシートが見つかりません。");
 
@@ -307,30 +365,37 @@ function doGet(e) {
     });
 
     // ▼▼ 評価済みデータの紐付け処理 ▼▼
-    const evalSheet = ss.getSheetByName("評価結果");
+    // 1次審査の場合は「1次審査結果」、2次/最終の場合は「評価結果」シートから取得
+    const evalSheetName = currentPhase === '1次審査' ? '1次審査結果' : '評価結果';
+    const evalSheet = ss.getSheetByName(evalSheetName);
+    
     if (evalSheet) {
       const evalData = evalSheet.getDataRange().getValues();
       if (evalData.length > 1) {
         const evalHeaders = evalData[0];
         const targetIdx = evalHeaders.indexOf("対象者");
         const reviewerIdx = evalHeaders.indexOf("評価者名");
+        const phaseIdx = evalHeaders.indexOf("フェーズ"); // 2次/最終の場合
         
         if (targetIdx !== -1 && reviewerIdx !== -1) {
-          // 各候補者ごとに、誰が評価したかのリスト（evaluatedBy）を作る
           const evalMap = {};
           for (let i = 1; i < evalData.length; i++) {
              const targetName = evalData[i][targetIdx];
              const reviewerName = evalData[i][reviewerIdx];
-             if (targetName && reviewerName) {
+             // シートにフェーズ列がある場合、現在のフェーズと一致するか確認
+             let isValidPhase = true;
+             if (phaseIdx !== -1 && currentPhase !== '1次審査') {
+               isValidPhase = (evalData[i][phaseIdx] === currentPhase);
+             }
+
+             if (targetName && reviewerName && isValidPhase) {
                 if (!evalMap[targetName]) evalMap[targetName] = [];
-                // 同じ名前が複数回入らないようにする
                 if (!evalMap[targetName].includes(reviewerName)) {
                    evalMap[targetName].push(reviewerName);
                 }
              }
           }
           
-          // result配列の各要素に evaluatedBy を付与する
           result.forEach(candidate => {
             const name = candidate["対象者名"];
             candidate.evaluatedBy = evalMap[name] || [];
@@ -340,7 +405,11 @@ function doGet(e) {
     }
     // ▲▲ 評価済みデータの紐付け処理 ここまで ▲▲
 
-    return ContentService.createTextOutput(JSON.stringify({ status: 'success', data: result })).setMimeType(ContentService.MimeType.JSON);
+    return ContentService.createTextOutput(JSON.stringify({ 
+      status: 'success', 
+      phase: currentPhase,
+      data: result 
+    })).setMimeType(ContentService.MimeType.JSON);
   } catch (error) {
     return ContentService.createTextOutput(JSON.stringify({ status: 'error', message: error.message })).setMimeType(ContentService.MimeType.JSON);
   }

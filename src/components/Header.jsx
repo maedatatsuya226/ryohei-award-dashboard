@@ -8,7 +8,8 @@ export default function Header({
     uniqueHospitals, uniqueDepartments, uniqueJobTitles,
     currentReviewer, setCurrentReviewer,
     showEvaluated, setShowEvaluated,
-    reviewers = []
+    reviewers = [],
+    phase
 }) {
     return (
         <header className="bg-slate-900 text-white shadow-lg sticky top-0 z-50 border-b border-amber-500/30">
@@ -23,8 +24,13 @@ export default function Header({
                             </svg>
                         </div>
                         <div>
-                            <h1 className="text-2xl font-serif font-bold tracking-wider text-slate-50">良平アワード</h1>
-                            <p className="text-xs text-amber-400/80 tracking-widest uppercase">Review Dashboard</p>
+                            <div className="flex items-center gap-3">
+                                <h1 className="text-2xl font-serif font-bold tracking-wider text-slate-50">良平アワード</h1>
+                                <span className="px-2 py-0.5 rounded text-xs font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                    {phase}
+                                </span>
+                            </div>
+                            <p className="text-xs text-amber-400/80 tracking-widest uppercase mt-0.5">Review Dashboard</p>
                         </div>
                     </div>
 

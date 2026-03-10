@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 
-export default function EvaluationModal({ candidate, onClose }) {
-    const [score, setScore] = useState('');
+export default function EvaluationModal({ candidate, phase, onClose }) {
+    const [score, setScore] = useState(''); // 2次/最終用(1-100) or 1次用(1-5)
     const [comment, setComment] = useState('');
     // localStorageを利用して評価者名を保持（毎回入力する手間を省く）
     const [reviewerName, setReviewerName] = useState(() => localStorage.getItem('ryohei_evaluator') || '');
@@ -56,7 +56,8 @@ export default function EvaluationModal({ candidate, onClose }) {
                 jobTitle: candidate.jobTitle,
                 reviewerName: reviewerName,
                 score: score,
-                comment: comment
+                comment: comment,
+                phase: phase // 追加: GAS側で処理を分けるため
             };
 
             await fetch(import.meta.env.VITE_GAS_API_URL, {
@@ -152,30 +153,58 @@ export default function EvaluationModal({ candidate, onClose }) {
                                 )}
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-bold text-slate-700 mb-2">総合評価スコア (1〜100点) <span className="text-amber-600">*</span></label>
-                                <input
-                                    type="number"
-                                    min="1" max="100"
-                                    required
-                                    value={score}
-                                    onChange={(e) => setScore(e.target.value)}
-                                    className="w-full text-lg p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
-                                    placeholder="例: 85"
-                                />
-                            </div>
+                            {/* ======== 1次審査の場合 (5段階評価) ======== */}
+                            {phase === '1次審査' ? (
+                                <div>
+                                    <label className="block text-sm font-bold text-slate-700 mb-2 text-center">総合評価 <span className="text-amber-600">*</span></label>
+                                    <div className="flex justify-center gap-2">
+                                        {[1, 2, 3, 4, 5].map((star) => (
+                                            <button
+                                                key={star}
+                                                type="button"
+                                                onClick={() => setScore(star)}
+                                                className={`w-14 h-14 rounded-full flex items-center justify-center text-2xl transition-all ${score >= star
+                                                        ? 'bg-amber-100 text-amber-500 scale-110 shadow-md shadow-amber-200/50'
+                                                        : 'bg-slate-100 text-slate-300 hover:bg-slate-200'
+                                                    }`}
+                                            >
+                                                ★
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <p className="text-center text-sm text-slate-500 mt-3">
+                                        {score ? `評価: ${score} / 5` : 'タップして評価を選択'}
+                                    </p>
+                                </div>
+                            ) : (
+                                /* ======== 2次・最終審査の場合 (100点満点＋コメント) ======== */
+                                <>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 mb-2">総合評価スコア (1〜100点) <span className="text-amber-600">*</span></label>
+                                        <input
+                                            type="number"
+                                            min="1" max="100"
+                                            required
+                                            value={score}
+                                            onChange={(e) => setScore(e.target.value)}
+                                            className="w-full text-lg p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
+                                            placeholder="例: 85"
+                                        />
+                                    </div>
 
-                            <div>
-                                <label className="block text-sm font-bold text-slate-700 mb-2">評価コメント</label>
-                                <textarea
-                                    rows="4"
-                                    required
-                                    value={comment}
-                                    onChange={(e) => setComment(e.target.value)}
-                                    className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none resize-none"
-                                    placeholder="選考理由や所感を入力してください..."
-                                ></textarea>
-                            </div>
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 mb-2">評価コメント</label>
+                                        <textarea
+                                            rows="4"
+                                            required={phase === '最終選考'} // 最終の場合は必須など（運用に合わせて）
+                                            value={comment}
+                                            onChange={(e) => setComment(e.target.value)}
+                                            className="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none resize-none"
+                                            placeholder="選考理由や所感を入力してください..."
+                                        ></textarea>
+                                    </div>
+                                </>
+                            )}
 
                             <div className="pt-2 flex gap-3">
                                 <button
