@@ -3,53 +3,46 @@ import React, { useState } from 'react';
 export default function EvaluationModal({ candidate, phase, currentReviewer, onClose, onEvaluated }) {
     const [score, setScore] = useState(''); // 2次/最終用(1-100) or 1次用(1-5)
     const [comment, setComment] = useState('');
-    const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
 
     // 評価者はヘッダーで選択したログイン中の審査員に固定（別人名義での送信を防ぐ）
     const reviewerName = currentReviewer;
 
-    const handleSubmit = async (e) => {
+    const handleSubmit = (e) => {
         e.preventDefault();
-        setIsSubmitting(true);
 
-        try {
-            const payload = {
-                action: 'evaluate',
-                candidateName: candidate.candidateName,
-                hospitalName: candidate.hospitalName,
-                department: candidate.department,
-                jobTitle: candidate.jobTitle,
-                reviewerName: reviewerName,
-                score: score,
-                comment: comment,
-                phase: phase // 追加: GAS側で処理を分けるため
-            };
+        const payload = {
+            action: 'evaluate',
+            candidateName: candidate.candidateName,
+            hospitalName: candidate.hospitalName,
+            department: candidate.department,
+            jobTitle: candidate.jobTitle,
+            reviewerName: reviewerName,
+            score: score,
+            comment: comment,
+            phase: phase // GAS側で処理を分けるため
+        };
 
-            await fetch(import.meta.env.VITE_GAS_API_URL, {
+        // GASの応答はCORS制約で読めず待つ意味がないため、送信はバックグラウンドで実行。
+        // ネットワークレベルで失敗したときだけ警告を出す
+        const GAS_URL = import.meta.env.VITE_GAS_API_URL;
+        if (GAS_URL) {
+            fetch(GAS_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'text/plain' },
                 body: JSON.stringify(payload)
+            }).catch((error) => {
+                console.error('Submit error:', error);
+                alert(`「${candidate.candidateName}」さんの評価送信に失敗した可能性があります。\n通信環境を確認のうえ、ページをリロードして評価が記録されているかご確認ください。`);
             });
-
-            // GASからのCORSエラー回避のため、fetch終了時点で成功と見なす
-            setIsSubmitting(false);
-            setIsSuccess(true);
-            onEvaluated?.(candidate.id, reviewerName);
-            setTimeout(() => {
-                onClose();
-            }, 1500);
-
-        } catch (error) {
-            console.error('Submit error:', error);
-            setIsSubmitting(false);
-            // ネットワークエラー以外は成功扱い（GASのCORS仕様）
-            setIsSuccess(true);
-            onEvaluated?.(candidate.id, reviewerName);
-            setTimeout(() => {
-                onClose();
-            }, 1500);
         }
+
+        // 即時に完了扱いにして、一覧からカードを消す
+        setIsSuccess(true);
+        onEvaluated?.(candidate.id, reviewerName);
+        setTimeout(() => {
+            onClose();
+        }, 800);
     };
 
     if (!candidate) return null;
@@ -162,14 +155,9 @@ export default function EvaluationModal({ candidate, phase, currentReviewer, onC
                                 </button>
                                 <button
                                     type="submit"
-                                    disabled={isSubmitting}
-                                    className="flex-1 py-3 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-lg shadow-amber-600/30 transition-colors disabled:opacity-50 flex justify-center items-center"
+                                    className="flex-1 py-3 px-4 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg shadow-lg shadow-amber-600/30 transition-colors flex justify-center items-center"
                                 >
-                                    {isSubmitting ? (
-                                        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                    ) : (
-                                        "評価を送信する"
-                                    )}
+                                    評価を送信する
                                 </button>
                             </div>
                         </form>
