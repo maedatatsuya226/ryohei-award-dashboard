@@ -6,7 +6,7 @@ import ReviewerLoginModal from './components/ReviewerLoginModal';
 import { useCandidates } from './hooks/useCandidates';
 
 function App() {
-  const { candidates, phase, loading, error } = useCandidates();
+  const { candidates, phase, loading, error, markEvaluated } = useCandidates();
 
   // States for Modals
   const [selectedCandidate, setSelectedCandidate] = useState(null);
@@ -173,6 +173,8 @@ function App() {
         <EvaluationModal
           candidate={selectedCandidate}
           phase={phase}
+          currentReviewer={currentReviewer}
+          onEvaluated={markEvaluated}
           onClose={() => setSelectedCandidate(null)}
         />
       )}

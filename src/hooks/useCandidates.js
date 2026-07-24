@@ -121,5 +121,14 @@ export function useCandidates() {
         fetchCandidates();
     }, []);
 
-    return { candidates, phase, loading, error };
+    // 評価送信後、手元のデータにも評価者を反映する（リロードせずにカードを消すため）
+    const markEvaluated = (candidateId, reviewerName) => {
+        setCandidates(prev => prev.map(c => {
+            if (c.id !== candidateId) return c;
+            if (c.evaluatedBy && c.evaluatedBy.includes(reviewerName)) return c;
+            return { ...c, evaluatedBy: [...(c.evaluatedBy || []), reviewerName] };
+        }));
+    };
+
+    return { candidates, phase, loading, error, markEvaluated };
 }

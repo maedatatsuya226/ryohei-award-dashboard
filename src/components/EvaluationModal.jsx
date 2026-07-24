@@ -1,51 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 
-export default function EvaluationModal({ candidate, phase, onClose }) {
+export default function EvaluationModal({ candidate, phase, currentReviewer, onClose, onEvaluated }) {
     const [score, setScore] = useState(''); // 2次/最終用(1-100) or 1次用(1-5)
     const [comment, setComment] = useState('');
-    // localStorageを利用して評価者名を保持（毎回入力する手間を省く）
-    const [reviewerName, setReviewerName] = useState(() => localStorage.getItem('ryohei_evaluator') || '');
-    const [reviewers, setReviewers] = useState([]);
-    const [isLoadingReviewers, setIsLoadingReviewers] = useState(true);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
 
-    useEffect(() => {
-        const fetchReviewers = async () => {
-            try {
-                const GAS_URL = import.meta.env.VITE_GAS_API_URL;
-                if (!GAS_URL) throw new Error("VITE_GAS_API_URL is not set");
-
-                const response = await fetch(`${GAS_URL}?action=getReviewers`);
-                const json = await response.json();
-
-                // ユーザーからの指示通り、配列が直接返ってくると仮定（例: ['山田太郎', '佐藤花子']）
-                // 構造が { status: 'success', data: [...] } などであれば調整が必要ですが、
-                // 指定された "審査員の名前の配列を返すようにしました" に従います。
-                // 念のため、配列かどうかチェックしてセットします。
-                if (Array.isArray(json)) {
-                    setReviewers(json);
-                } else if (json.reviewers && Array.isArray(json.reviewers)) {
-                    // 念のためのフォールバック
-                    setReviewers(json.reviewers);
-                } else if (json.data && Array.isArray(json.data)) {
-                    setReviewers(json.data);
-                }
-            } catch (error) {
-                console.error('Failed to fetch reviewers:', error);
-            } finally {
-                setIsLoadingReviewers(false);
-            }
-        };
-
-        fetchReviewers();
-    }, []);
+    // 評価者はヘッダーで選択したログイン中の審査員に固定（別人名義での送信を防ぐ）
+    const reviewerName = currentReviewer;
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setIsSubmitting(true);
-
-        localStorage.setItem('ryohei_evaluator', reviewerName);
 
         try {
             const payload = {
@@ -69,6 +35,7 @@ export default function EvaluationModal({ candidate, phase, onClose }) {
             // GASからのCORSエラー回避のため、fetch終了時点で成功と見なす
             setIsSubmitting(false);
             setIsSuccess(true);
+            onEvaluated?.(candidate.id, reviewerName);
             setTimeout(() => {
                 onClose();
             }, 1500);
@@ -78,6 +45,7 @@ export default function EvaluationModal({ candidate, phase, onClose }) {
             setIsSubmitting(false);
             // ネットワークエラー以外は成功扱い（GASのCORS仕様）
             setIsSuccess(true);
+            onEvaluated?.(candidate.id, reviewerName);
             setTimeout(() => {
                 onClose();
             }, 1500);
@@ -124,33 +92,11 @@ export default function EvaluationModal({ candidate, phase, onClose }) {
 
                         <form onSubmit={handleSubmit} className="space-y-5">
                             <div>
-                                <label className="block text-sm font-bold text-slate-700 mb-2">評価者（あなた）のお名前 <span className="text-amber-600">*</span></label>
-                                {isLoadingReviewers ? (
-                                    <div className="w-full text-base p-3 border border-slate-300 rounded-lg bg-slate-50 text-slate-500 animate-pulse">
-                                        評価者リストを読み込み中...
-                                    </div>
-                                ) : reviewers && reviewers.length > 0 ? (
-                                    <select
-                                        required
-                                        value={reviewerName}
-                                        onChange={(e) => setReviewerName(e.target.value)}
-                                        className="w-full text-base p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none bg-white"
-                                    >
-                                        <option value="" disabled>氏名を選択してください</option>
-                                        {reviewers.map((name, idx) => (
-                                            <option key={idx} value={name}>{name}</option>
-                                        ))}
-                                    </select>
-                                ) : (
-                                    <input
-                                        type="text"
-                                        required
-                                        value={reviewerName}
-                                        onChange={(e) => setReviewerName(e.target.value)}
-                                        className="w-full text-base p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500 outline-none"
-                                        placeholder="例: 山田 太郎"
-                                    />
-                                )}
+                                <label className="block text-sm font-bold text-slate-700 mb-2">評価者（あなた）</label>
+                                <div className="w-full text-base p-3 border border-slate-200 rounded-lg bg-slate-50 text-slate-800 font-medium">
+                                    {reviewerName}
+                                </div>
+                                <p className="mt-1 text-xs text-slate-400">評価者を変更する場合は、画面上部で切り替えてください。</p>
                             </div>
 
                             {/* ======== 1次審査の場合 (5段階評価) ======== */}
