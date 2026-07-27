@@ -375,13 +375,19 @@ function doGet(e) {
         const evalHeaders = evalData[0];
         const targetIdx = evalHeaders.indexOf("対象者");
         const reviewerIdx = evalHeaders.indexOf("評価者名");
+        const deptIdx = evalHeaders.indexOf("所属"); // 「病院名 / 部署」形式で保存されている
         const phaseIdx = evalHeaders.indexOf("フェーズ"); // 2次/最終の場合
-        
+
         if (targetIdx !== -1 && reviewerIdx !== -1) {
+          // 同名の対象者（例: 部署単位のエントリー）を区別するため、
+          // 「対象者名｜所属」を複合キーにして紐付ける
+          const makeKey = (name, affiliation) => `${String(name).trim()}|${String(affiliation || '').trim()}`;
+
           const evalMap = {};
           for (let i = 1; i < evalData.length; i++) {
              const targetName = evalData[i][targetIdx];
              const reviewerName = evalData[i][reviewerIdx];
+             const affiliation = deptIdx !== -1 ? evalData[i][deptIdx] : '';
              // シートにフェーズ列がある場合、現在のフェーズと一致するか確認
              let isValidPhase = true;
              if (phaseIdx !== -1 && currentPhase !== '1次審査') {
@@ -389,16 +395,20 @@ function doGet(e) {
              }
 
              if (targetName && reviewerName && isValidPhase) {
-                if (!evalMap[targetName]) evalMap[targetName] = [];
-                if (!evalMap[targetName].includes(reviewerName)) {
-                   evalMap[targetName].push(reviewerName);
+                const key = makeKey(targetName, affiliation);
+                if (!evalMap[key]) evalMap[key] = [];
+                if (!evalMap[key].includes(reviewerName)) {
+                   evalMap[key].push(reviewerName);
                 }
              }
           }
-          
+
           result.forEach(candidate => {
-            const name = candidate["対象者名"];
-            candidate.evaluatedBy = evalMap[name] || [];
+            // 評価結果シートの「所属」列と同じ形式（病院名 / 部署）でキーを組み立てる
+            const affiliation = deptIdx !== -1
+              ? `${candidate["病院名"] || ''} / ${candidate["所属部署"] || ''}`
+              : '';
+            candidate.evaluatedBy = evalMap[makeKey(candidate["対象者名"], affiliation)] || [];
           });
         }
       }
